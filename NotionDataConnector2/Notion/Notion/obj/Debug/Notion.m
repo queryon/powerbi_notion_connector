@@ -8,24 +8,24 @@ shared Notion.Navigation = () =>
 
         objects = #table(
             {"Name",                                  "Key",                               "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
-            {"Basic Raw Data",  "Notion.NameOfDatabase",           Notion.Contents(), "Table",    "Table",    true},
-            {Notion.NameOfDatabase(0),  "Notion.NameOfDatabases",           Notion.DatabaseContents("1bf3bbe8594f402cb48f30e13bd8057b"), "Table",    "Table",    true},
-            {Notion.NameOfDatabase(1),  "Notion.NameOfDatabases1",          Notion.DatabaseContents("bf7187cfd9b04f35b4859adc52174b08"), "Table",    "Table",    true}
+            {"Basic Raw Header",  "Notion.NameOfDatabase",           Notion.HeaderContents(), "Table",    "Table",    true},
+
+            {"Basic Raw Contents",  "Notion.DatabaseContents0",         Notion.DatabaseContents("1bf3bbe8594f402cb48f30e13bd8057b"), "Table",    "Table",    true},
+            {"Basic Raw Contents",  "Notion.DatabaseContents1",         Notion.DatabaseContents("bf7187cfd9b04f35b4859adc52174b08"), "Table",    "Table",    true},
+
+            {Notion.NameOfDatabase(0),  "Notion.NameOfDatabasesdf",           Notion.DatabaseRecords0(), "Table",    "Table",    true},
+            {Notion.NameOfDatabase(1),  "Notion.NameOfDatabases1dfdsf",       Notion.DatabaseRecords1(), "Table",    "Table",    true}
             }),
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
-
-
-shared Notion.FunctionCallThatReturnsATable = () =>
-    #table({"DynamicColumn"}, {{"Dynamic Value"}});
 
 Notion = [
     TestConnection = (dataSourcePath) => {"Notion.Navigation"},
     Authentication = [
         Key = 
         [
-            KeyLabel = "Notion API Key"
+            KeyLabel = "Notion API Key. See Queryon.com/notion"
         ]
     ],
     Label = Extension.LoadString("DataSourceLabel")
@@ -72,7 +72,7 @@ Table.ToNavigationTable = (
 
 //-------------------------------------------------------------
 [DataSource.Kind="Notion"]
-shared Notion.Contents = () =>
+shared Notion.HeaderContents = () =>
     let
 
         url = "https://api.notion.com/v1/databases",
@@ -118,8 +118,6 @@ shared Notion.AmountOfDatabases = () =>
 shared Notion.NameOfDatabase = (num) =>
     let
 
-
-
         Source = Notion.Navigation(),
         Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
@@ -143,3 +141,35 @@ shared Notion.DatabaseID = (num) =>
         id;
 
 
+
+
+
+shared Notion.DatabaseRecords0 = () =>
+    let
+        Source = Notion.Navigation(),
+        Notion.DatabaseContents0 = Source{[Key="Notion.DatabaseContents0"]}[Data],
+        #"Imported JSON" = Json.Document(Notion.DatabaseContents0,65001),
+        results = #"Imported JSON"[results]
+    in
+        results;
+
+shared Notion.DatabaseRecords1 = () =>
+    let
+        Source = Notion.Navigation(),
+        Notion.DatabaseContents1 = Source{[Key="Notion.DatabaseContents1"]}[Data],
+        #"Imported JSON" = Json.Document(Notion.DatabaseContents1,65001),
+        results = #"Imported JSON"[results]
+    in
+        results;
+
+
+shared Notion.DatabaseProperties = (num) =>
+    let
+        Source = Notion.Navigation(),
+        Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
+        #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
+        results = #"Imported JSON"[results],
+        results1 = results{num},
+        properties = results1[properties]
+    in
+        properties;
