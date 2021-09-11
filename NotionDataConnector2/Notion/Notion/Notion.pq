@@ -5,23 +5,17 @@ section Notion;
 
 shared Notion.Navigation = () =>
     let
-
         objects = #table(
-            {"Name",                                  "Key",                               "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
-            {"Basic Raw Header",  "Notion.NameOfDatabase",           Notion.HeaderContents(), "Table",    "Table",    true},
-
-            {"Basic Raw Contents",  "Notion.DatabaseContents0",         Notion.DatabaseContents("1bf3bbe8594f402cb48f30e13bd8057b"), "Table",    "Table",    true},
-            {"Basic Raw Contents",  "Notion.DatabaseContents1",         Notion.DatabaseContents("bf7187cfd9b04f35b4859adc52174b08"), "Table",    "Table",    true},
-
-            {Notion.NameOfDatabase(0),  "Notion.NameOfDatabasesdf",           Notion.DatabaseRecords0(), "Table",    "Table",    true},
-            {Notion.NameOfDatabase(1),  "Notion.NameOfDatabases1dfdsf",       Notion.DatabaseRecords1(), "Table",    "Table",    true}
+            {"Name",                    "Key",                   "Data",                                                     "ItemKind", "ItemName", "IsLeaf"},{
+            {Notion.NameOfDatabase(0),  Notion.DatabaseID(0),    CreateNavTable(0), "Folder",    "Table",    false},
+            {Notion.NameOfDatabase(1),  Notion.DatabaseID(1),    CreateNavTable(1), "Folder",    "Table",    false}
             }),
-        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf") 
+
     in
         NavTable;
 
 Notion = [
-    TestConnection = (dataSourcePath) => {"Notion.Navigation"},
     Authentication = [
         Key = 
         [
@@ -119,7 +113,7 @@ shared Notion.NameOfDatabase = (num) =>
     let
 
         Source = Notion.Navigation(),
-        Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
+        Notion.NameOfDatabase = Notion.HeaderContents(),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results],
         results1 = results{num},
@@ -132,7 +126,7 @@ shared Notion.NameOfDatabase = (num) =>
 shared Notion.DatabaseID = (num) =>
     let
         Source = Notion.Navigation(),
-        Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
+        Notion.NameOfDatabase = Notion.HeaderContents(),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results],
         results1 = results{num},
@@ -141,35 +135,109 @@ shared Notion.DatabaseID = (num) =>
         id;
 
 
-
-
-
-shared Notion.DatabaseRecords0 = () =>
+shared Notion.DatabaseRecords = (num) =>
     let
-        Source = Notion.Navigation(),
-        Notion.DatabaseContents0 = Source{[Key="Notion.DatabaseContents0"]}[Data],
+
+        database_id = Notion.DatabaseID(num),
+
+        Notion.DatabaseContents0 = Notion.DatabaseContents(database_id),
         #"Imported JSON" = Json.Document(Notion.DatabaseContents0,65001),
-        results = #"Imported JSON"[results]
-    in
-        results;
+        #"Converted to Table" = Table.FromList(Notion.DatabaseContents0, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
 
-shared Notion.DatabaseRecords1 = () =>
-    let
-        Source = Notion.Navigation(),
-        Notion.DatabaseContents1 = Source{[Key="Notion.DatabaseContents1"]}[Data],
-        #"Imported JSON" = Json.Document(Notion.DatabaseContents1,65001),
-        results = #"Imported JSON"[results]
+
+
+        list_results = #"Imported JSON"[results],
+        table_toTable = Table.FromList(list_results, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+        table_expandColumn1 = Table.ExpandRecordColumn(table_toTable, "Column1", {"properties"}, {"Column1.properties"}),
+
+        table_PropertiesExpanded = Table.FromRecords(Table.Column(table_expandColumn1, "Column1.properties")),
+
+        //ThisIsNull = #table({})
+
+        list_PropertiesExpandedColumnName = Table.ColumnNames(table_PropertiesExpanded)
+        
+        //list_PropertiesExpandedColumnName1 = List.Generate(() => 1, each _ < 10, each _ + 1)
     in
-        results;
+        table_PropertiesExpanded;
 
 
 shared Notion.DatabaseProperties = (num) =>
     let
-        Source = Notion.Navigation(),
-        Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
+        Notion.NameOfDatabase = Notion.DatabaseContents(Notion.DatabaseID(num)),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results],
         results1 = results{num},
         properties = results1[properties]
     in
         properties;
+
+shared ConvertToTable_SubTable = (database_records) =>
+    let
+
+        database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+        database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
+
+        column_names = Table.ColumnNames(database_records_table_expanded),
+
+        //database_records_table_expanded_deeper = Table.ExpandRecordColumn(database_records_table_expanded, column_names{2}, column_names{2})
+
+        database_records_table_expanded_deeper = Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+
+        result = if column_names{2} = "select" then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+
+        result_removed_id   = Table.RemoveColumns(result, "id"),
+        result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
+
+
+        ending_column_names = Table.ColumnNames(result_removed_type),
+
+        last_table_expand   = Table.FromRecords(Table.Column(result_removed_type, ending_column_names{0}))
+    in
+        last_table_expand;
+
+
+
+CreateNavTable = (num) as table => 
+
+    
+
+    let
+
+        ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+        Tabled_Column_Data = ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})),
+
+        objects = #table(
+            {"Name",         "Key",   "Data",                                                    "ItemKind", "ItemName", "IsLeaf"},{
+
+            {ColumnNames{0}, ColumnNames{0}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})), "Table",    "Table",    true},
+            {ColumnNames{1}, ColumnNames{1}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})), "Table",    "Table",    true},
+            {ColumnNames{2}, ColumnNames{2}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{2})), "Table",    "Table",    true},
+            {ColumnNames{3}, ColumnNames{3}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{3})), "Table",    "Table",    true},
+            {ColumnNames{4}, ColumnNames{4}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{4})), "Table",    "Table",    true}
+
+        }),
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable;
+
+CreateNavTablev2 = (num) as table => 
+
+    let
+
+        ColumnNames   = Table.ColumnNames(Notion.DatabaseRecords(num)),
+        ListToIterate = List.Numbers(0, 2),
+
+        objects = List.Accumulate(ListToIterate, 0, (state, current) => #table({"Name", "Key",   "Data", "ItemKind", "ItemName", "IsLeaf"},{ {ColumnNames{current}, ColumnNames{current}, Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), "Table",    "Table",    true} })),
+        //objects2 = List.Accumulate(ListToIterate, 0, (state, current) => #table({"Name", "Key",   "Data", "ItemKind", "ItemName", "IsLeaf"},{ {ColumnNames{current}, ColumnNames{current}, Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), "Table",    "Table",    true} })),
+
+        //combined = Table.Combine({objects, objects2}),
+
+        CombinedNavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        CombinedNavTable;
+
+
+//list_PropertiesExpandedColumnName1 = List.Generate(() => 1, each _ < 10, each _ + 1) //Working ForLoop with generated list as work around??
