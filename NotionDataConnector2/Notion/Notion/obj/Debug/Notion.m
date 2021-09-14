@@ -5,13 +5,15 @@ section Notion;
 
 shared Notion.Navigation = () =>
     let
-        objects = #table(
-            {"Name",                    "Key",                   "Data",                                                     "ItemKind", "ItemName", "IsLeaf"},{
-            {Notion.NameOfDatabase(0),  Notion.DatabaseID(0),    CreateNavTable(0), "Folder",    "Table",    false},
-            {Notion.NameOfDatabase(1),  Notion.DatabaseID(1),    CreateNavTable(1), "Folder",    "Table",    false}
-            }),
-        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf") 
 
+        iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV2(current), "Folder",    "Table",    false}}),
+
+        objects = #table(navHeader, navInsights),
+
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
 
@@ -26,12 +28,13 @@ Notion = [
 ];
 
 
+
 // Data Source UI publishing description
 Notion.Publish = [
     Beta = true,
     Category = "Other",
     ButtonText = { Extension.LoadString("ButtonTitle"), Extension.LoadString("ButtonHelp") },
-    LearnMoreUrl = "https://powerbi.microsoft.com/",
+    LearnMoreUrl = "https://Queryon.com/notion",
     SourceImage = Notion.Icons,
     SourceTypeImage = Notion.Icons
 ];
@@ -49,20 +52,20 @@ Table.ToNavigationTable = (
     itemKindColumn as text,
     itemNameColumn as text,
     isLeafColumn as text
-) as table =>
-    let
-        tableType = Value.Type(table),
-        newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
-        [
-            NavigationTable.NameColumn = nameColumn, 
-            NavigationTable.DataColumn = dataColumn,
-            NavigationTable.ItemKindColumn = itemKindColumn, 
-            Preview.DelayColumn = itemNameColumn, 
-            NavigationTable.IsLeafColumn = isLeafColumn
-        ],
-        navigationTable = Value.ReplaceType(table, newTableType)
-    in
-        navigationTable;
+    ) as table =>
+        let
+            tableType = Value.Type(table),
+            newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
+            [
+                NavigationTable.NameColumn = nameColumn,
+                NavigationTable.DataColumn = dataColumn,
+                NavigationTable.ItemKindColumn = itemKindColumn, 
+                Preview.DelayColumn = itemNameColumn, 
+                NavigationTable.IsLeafColumn = isLeafColumn
+            ],
+            navigationTable = Value.ReplaceType(table, newTableType)
+        in
+            navigationTable;
 
 //-------------------------------------------------------------
 [DataSource.Kind="Notion"]
@@ -103,7 +106,7 @@ shared Notion.DatabaseContents = (database_id) =>
 shared Notion.AmountOfDatabases = () =>
     let
         Source = Notion.Navigation(),
-        Notion.NameOfDatabase = Source{[Key="Notion.NameOfDatabase"]}[Data],
+        Notion.NameOfDatabase = Notion.HeaderContents(),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results]
     in
@@ -172,7 +175,7 @@ shared Notion.DatabaseProperties = (num) =>
     in
         properties;
 
-shared ConvertToTable_SubTable = (database_records) =>
+shared ConvertToTable_SubTable = (database_records, name) =>
     let
 
         database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
@@ -190,54 +193,74 @@ shared ConvertToTable_SubTable = (database_records) =>
         result_removed_id   = Table.RemoveColumns(result, "id"),
         result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
 
-
+        //after_removed_expand = Table.FromRecords(Table.Column(result_removed_type, "title")),
         ending_column_names = Table.ColumnNames(result_removed_type),
 
-        last_table_expand   = Table.FromRecords(Table.Column(result_removed_type, ending_column_names{0}))
+        handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
+        handle_types_check2 = if ending_column_names{0} = "rich_text"    then HandleRichText(result_removed_type, name)    else handle_types_check1,
+        handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
+        handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3
+
+        //ending_column_names = Table.ColumnNames(result_removed_type),
+        //last_table_expand   = Table.FromRecords(Table.Column(result_removed_type, ending_column_names{0}))
     in
-        last_table_expand;
+        handle_types_check4;
 
-
-
-CreateNavTable = (num) as table => 
-
-    
-
+shared HandleMultiSelect = (database_table, name) =>
     let
+
+        Expanded = Table.ExpandRecordColumn(database_table, "multi_select", {"id", "name", "color"}, {"multi_select.id", name, "multi_select.color"}),
+        Expanded_removed1 = Table.RemoveColumns(Expanded, "multi_select.id"),
+        Expanded_removed2 = Table.RemoveColumns(Expanded_removed1, "multi_select.color")
+    in
+        Expanded_removed2;
+
+shared HandleRichText = (database_table, name) =>
+    let
+        Expanded = Table.ExpandRecordColumn(database_table, "rich_text", {"plain_text"}, {name})
+    in
+        Expanded;
+
+shared HandleTitle = (database_table, name) =>
+    let
+        Expanded = Table.ExpandRecordColumn(database_table, "title", {"plain_text"}, {name})
+    in
+        Expanded;
+
+shared HandleSelect = (database_table, name) =>
+    let
+        Expanded = Table.ExpandRecordColumn(database_table, "select", {"name"}, {name})
+    in
+        Expanded;
+
+
+CreateNavTableV2 = (num) as table => 
+        let
 
         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
-        Tabled_Column_Data = ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})),
+        AmountOfSubs = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
 
-        objects = #table(
-            {"Name",         "Key",   "Data",                                                    "ItemKind", "ItemName", "IsLeaf"},{
+        iterList = List.Generate(() => AmountOfSubs, each _ > -1, each _ - 1),
 
-            {ColumnNames{0}, ColumnNames{0}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})), "Table",    "Table",    true},
-            {ColumnNames{1}, ColumnNames{1}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1})), "Table",    "Table",    true},
-            {ColumnNames{2}, ColumnNames{2}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{2})), "Table",    "Table",    true},
-            {ColumnNames{3}, ColumnNames{3}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{3})), "Table",    "Table",    true},
-            {ColumnNames{4}, ColumnNames{4}, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{4})), "Table",    "Table",    true}
+        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
+        objects = #table(navHeader, navInsights),
 
-        }),
+
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
 
-CreateNavTablev2 = (num) as table => 
-
+shared Notion.NavigationV2 = () =>
     let
 
-        ColumnNames   = Table.ColumnNames(Notion.DatabaseRecords(num)),
-        ListToIterate = List.Numbers(0, 2),
+        iterList = List.Generate(() => Notion.AmountOfDatabases(), each _ > -1, each _ - 1),
 
-        objects = List.Accumulate(ListToIterate, 0, (state, current) => #table({"Name", "Key",   "Data", "ItemKind", "ItemName", "IsLeaf"},{ {ColumnNames{current}, ColumnNames{current}, Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), "Table",    "Table",    true} })),
-        //objects2 = List.Accumulate(ListToIterate, 0, (state, current) => #table({"Name", "Key",   "Data", "ItemKind", "ItemName", "IsLeaf"},{ {ColumnNames{current}, ColumnNames{current}, Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), "Table",    "Table",    true} })),
+        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV2(current), "Folder",    "Table",    false}}),
+        objects = #table(navHeader, navInsights),
 
-        //combined = Table.Combine({objects, objects2}),
-
-        CombinedNavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
-        CombinedNavTable;
-
-
-//list_PropertiesExpandedColumnName1 = List.Generate(() => 1, each _ < 10, each _ + 1) //Working ForLoop with generated list as work around??
+        NavTable;
