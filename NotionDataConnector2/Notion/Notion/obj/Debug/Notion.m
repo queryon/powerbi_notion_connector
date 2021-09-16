@@ -188,7 +188,7 @@ shared ConvertToTable_SubTable = (database_records, name) =>
 
         database_records_table_expanded_deeper = Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
 
-        result = if column_names{2} = "select" then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+        result = if column_names{2} = "select" or column_names{2} = "number" then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
 
         result_removed_id   = Table.RemoveColumns(result, "id"),
         result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
@@ -199,19 +199,30 @@ shared ConvertToTable_SubTable = (database_records, name) =>
         handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
         handle_types_check2 = if ending_column_names{0} = "rich_text"    then HandleRichText(result_removed_type, name)    else handle_types_check1,
         handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
-        handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3
+        handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3,
+        handle_types_check5 = if ending_column_names{0} = "number"       then HandleNumber(result_removed_type, name)      else handle_types_check4,
 
-        //ending_column_names = Table.ColumnNames(result_removed_type),
-        //last_table_expand   = Table.FromRecords(Table.Column(result_removed_type, ending_column_names{0}))
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(handle_types_check5), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, handle_types_check5{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        
+        AllNewColumnNames = Table.ColumnNames(objects),
+        expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name})
+        //expandedv2 = Table.ExpandRecordColumn(objects, "Data", {"number"}, {name})
     in
-        handle_types_check4;
+        expandedv2;
 
 shared HandleMultiSelect = (database_table, name) =>
     let
-
         Expanded = Table.ExpandRecordColumn(database_table, "multi_select", {"id", "name", "color"}, {"multi_select.id", name, "multi_select.color"}),
         Expanded_removed1 = Table.RemoveColumns(Expanded, "multi_select.id"),
         Expanded_removed2 = Table.RemoveColumns(Expanded_removed1, "multi_select.color")
+
+        
     in
         Expanded_removed2;
 
@@ -233,6 +244,12 @@ shared HandleSelect = (database_table, name) =>
     in
         Expanded;
 
+shared HandleNumber = (database_table, name) =>
+    let
+        Expanded = Table.ExpandRecordColumn(database_table, "number", {"number"}, {name})
+    in
+        database_table;
+
 
 CreateNavTableV2 = (num) as table => 
         let
@@ -244,7 +261,8 @@ CreateNavTableV2 = (num) as table =>
         iterList = List.Generate(() => AmountOfSubs, each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
         objects = #table(navHeader, navInsights),
 
 
