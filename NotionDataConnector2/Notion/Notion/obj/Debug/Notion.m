@@ -209,10 +209,8 @@ shared ConvertToTable_SubTable = (database_records, name) =>
             state & {{current, handle_types_check5{current}}} ),
         objects = #table(navHeader, navInsights),
 
-        
         AllNewColumnNames = Table.ColumnNames(objects),
         expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name})
-        //expandedv2 = Table.ExpandRecordColumn(objects, "Data", {"number"}, {name})
     in
         expandedv2;
 
@@ -256,28 +254,15 @@ CreateNavTableV2 = (num) as table =>
 
         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
-        AmountOfSubs = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+        AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
 
-        iterList = List.Generate(() => AmountOfSubs, each _ > -1, each _ - 1),
+        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
             state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
         objects = #table(navHeader, navInsights),
 
-
-        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
-    in
-        NavTable;
-
-shared Notion.NavigationV2 = () =>
-    let
-
-        iterList = List.Generate(() => Notion.AmountOfDatabases(), each _ > -1, each _ - 1),
-
-        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV2(current), "Folder",    "Table",    false}}),
-        objects = #table(navHeader, navInsights),
 
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
