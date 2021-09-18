@@ -4,18 +4,21 @@ section Notion;
 [DataSource.Kind="Notion", Publish="Notion.Publish"]
 
 shared Notion.Navigation = () =>
+
     let
 
         iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV2(current), "Folder",    "Table",    false}}),
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV6(current), "Folder",    "Table",    false}}),
 
         objects = #table(navHeader, navInsights),
 
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
+
+
 
 Notion = [
     Authentication = [
@@ -204,15 +207,17 @@ shared ConvertToTable_SubTable = (database_records, name) =>
 
         iterList = List.Generate(() => Value.Subtract(Table.RowCount(handle_types_check5), 1), each _ > -1, each _ - 1),
 
-        navHeader = {"Key", "Data"}, 
+        navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
             state & {{current, handle_types_check5{current}}} ),
         objects = #table(navHeader, navInsights),
 
         AllNewColumnNames = Table.ColumnNames(objects),
-        expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name})
+        expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name}),
+
+        AddedTest = Table.AddColumn(expandedv2, "Test", each Notion.DatabaseRecords(2))
     in
-        expandedv2;
+        AddedTest;
 
 shared HandleMultiSelect = (database_table, name) =>
     let
@@ -222,7 +227,7 @@ shared HandleMultiSelect = (database_table, name) =>
 
         
     in
-        Expanded_removed2;
+        Expanded;
 
 shared HandleRichText = (database_table, name) =>
     let
@@ -267,3 +272,143 @@ CreateNavTableV2 = (num) as table =>
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
+
+        //ABOVE IS PROD
+
+
+CreateNavTableV6 = (num) as table => 
+
+    let
+
+        ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+        AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+
+        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1), // Column Count
+
+        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
+        
+
+        AddedTest = Table.AddColumn(navInsights, "Test", each 1),
+
+        objects = #table(navHeader, navInsights),
+
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable;
+
+        //ABOVE IS PROD
+
+CreateNavTableV5 = (num) as table => 
+
+    let
+
+        ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+        AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+
+        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
+
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})} ),
+    
+        Tag =  ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), "Tag"), "Tag"),
+
+        Data = #table(ColumnNames, {navInsights}),
+
+
+
+        objects = #table(
+            {"Name",       "Key",        "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
+            {"Item1",      "item1",      {navInsights}, "Table",    "Table",    true}
+
+            }),
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable;
+
+
+CreateNavTableV3 = (num) as table => 
+     let
+
+         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+
+
+         Content = {{ConvertToTable_SubTable2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{0}), ColumnNames{0}), "4", "4", "4"}}, 
+
+         expanded = Table.ToList(Table.ExpandTableColumn(Content, ColumnNames{0}, {ColumnNames{0}})),
+         
+         ActualData = #table(ColumnNames, expanded),
+
+
+         objects = #table(
+            {"Name",       "Key",        "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
+            {Notion.NameOfDatabase(num),      "item1",      ActualData, "Table",    "Table",    true}
+
+            }),
+         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+
+     in
+         NavTable;
+
+
+
+CreateNavTableV4 = (num) as table => 
+    let
+
+
+
+
+        ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+        iterList = List.Generate(() => 3, each _ > -1, each _ - 1),
+
+        DataAddedUp = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{ConvertToTable_SubTable2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
+
+        Data = #table(ColumnNames, DataAddedUp),
+
+        //on Nav
+        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+
+        navInsights = {{Notion.NameOfDatabase(num), 1, Data, "Table", "Table", true}},
+
+        objects = #table(navHeader, navInsights),
+
+        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable;
+
+
+shared ConvertToTable_SubTable2 = (database_records, name) =>
+    let
+
+        database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+        database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
+
+        column_names = Table.ColumnNames(database_records_table_expanded),
+
+        //database_records_table_expanded_deeper = Table.ExpandRecordColumn(database_records_table_expanded, column_names{2}, column_names{2})
+
+        database_records_table_expanded_deeper = Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+
+        result = if column_names{2} = "select" or column_names{2} = "number" then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+
+        result_removed_id   = Table.RemoveColumns(result, "id"),
+        result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
+
+        //after_removed_expand = Table.FromRecords(Table.Column(result_removed_type, "title")),
+        ending_column_names = Table.ColumnNames(result_removed_type),
+
+        handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
+        handle_types_check2 = if ending_column_names{0} = "rich_text"    then HandleRichText(result_removed_type, name)    else handle_types_check1,
+        handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
+        handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3,
+        handle_types_check5 = if ending_column_names{0} = "number"       then HandleNumber(result_removed_type, name)      else handle_types_check4
+
+    in
+        handle_types_check5;
