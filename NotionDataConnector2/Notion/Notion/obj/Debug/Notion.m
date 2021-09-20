@@ -10,7 +10,7 @@ shared Notion.Navigation = () =>
         iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV6(current), "Folder",    "Table",    false}}),
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV4(current), "Folder",    "Table",    true}}),
 
         objects = #table(navHeader, navInsights),
 
@@ -199,7 +199,8 @@ shared ConvertToTable_SubTable = (database_records, name) =>
         //after_removed_expand = Table.FromRecords(Table.Column(result_removed_type, "title")),
         ending_column_names = Table.ColumnNames(result_removed_type),
 
-        handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
+        //handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
+        handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else null,
         handle_types_check2 = if ending_column_names{0} = "rich_text"    then HandleRichText(result_removed_type, name)    else handle_types_check1,
         handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
         handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3,
@@ -213,11 +214,11 @@ shared ConvertToTable_SubTable = (database_records, name) =>
         objects = #table(navHeader, navInsights),
 
         AllNewColumnNames = Table.ColumnNames(objects),
-        expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name}),
+        expandedv2 = if ending_column_names{0} = "number" then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name}) else Table.ExpandRecordColumn(objects, "Data", {name}, {name})
 
-        AddedTest = Table.AddColumn(expandedv2, "Test", each Notion.DatabaseRecords(2))
+        
     in
-        AddedTest;
+        expandedv2;
 
 shared HandleMultiSelect = (database_table, name) =>
     let
@@ -275,25 +276,20 @@ CreateNavTableV2 = (num) as table =>
 
         //ABOVE IS PROD
 
-
-CreateNavTableV6 = (num) as table => 
-
-    let
+CreateNavTableVNew = (num) as table => 
+        let
 
         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
         AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
 
-        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1), // Column Count
+        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
             state & {{ColumnNames{current}, current, ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current}), "Table", "Table", true}} ),
-        
-
-        AddedTest = Table.AddColumn(navInsights, "Test", each 1),
-
         objects = #table(navHeader, navInsights),
+
 
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
@@ -301,8 +297,15 @@ CreateNavTableV6 = (num) as table =>
 
         //ABOVE IS PROD
 
-CreateNavTableV5 = (num) as table => 
+GetRowData = (table, RowIter, ColumnName) =>
+    let
+        column = Table.Column(table, ColumnName),
+        end2 = column{RowIter}
+        //end = table{RowIter}[Name]
+    in
+        end2;
 
+CreateNavTableV4 = (num) as table => 
     let
 
         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
@@ -311,76 +314,76 @@ CreateNavTableV5 = (num) as table =>
 
         iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
 
+        navHeader = {"Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})} ),
-    
-        Tag =  ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), "Tag"), "Tag"),
-
-        Data = #table(ColumnNames, {navInsights}),
+            state & {{ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
+        objects = #table(navHeader, navInsights),
 
 
 
-        objects = #table(
-            {"Name",       "Key",        "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
-            {"Item1",      "item1",      {navInsights}, "Table",    "Table",    true}
 
-            }),
-        NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+
+        //The start of the Join columns
+
+        reveredColumnNames = List.Reverse(ColumnNames),
+        
+        ListWithNotionKeyColumnHeaders = List.InsertRange(reveredColumnNames, 0, {"Notion_Key"}),
+
+        AmountOfSubsFroCombine = Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})),
+
+        iterListForCombined = List.Generate(() => 5, each _ > -1, each _ - 1),
+
+
+        //Combined = Table.AddJoinColumn(objects{0}[Data], "Notion_Key", objects{1}[Data], "Notion_Key", ColumnNames{0}),
+
+        CombinedJoinedColumnsTable_List = List.Accumulate(iterListForCombined, {}, (state, current) => 
+            state & {{ current, GetRowData(objects{0}[Data], current, reveredColumnNames{0}), GetRowData(objects{1}[Data], current, reveredColumnNames{1}), GetRowData(objects{2}[Data], current, reveredColumnNames{2}), GetRowData(objects{3}[Data], current, reveredColumnNames{3}) }} ),
+
+
+        CombinedobjectsToTable = #table(ListWithNotionKeyColumnHeaders, CombinedJoinedColumnsTable_List),
+
+        //Hard Code keep
+        Combined = Table.AddJoinColumn(objects{0}[Data], "Notion_Key", objects{1}[Data], "Notion_Key", ColumnNames{0}),
+
+        Combined1 = Table.AddJoinColumn(Combined, "Notion_Key", objects{2}[Data], "Notion_Key", ColumnNames{1}),
+
+        Combined2 = Table.AddJoinColumn(Combined1, "Notion_Key", objects{3}[Data], "Notion_Key", ColumnNames{2}),
+
+        Combined3 = Table.AddJoinColumn(Combined2, "Notion_Key", objects{4}[Data], "Notion_Key", ColumnNames{4})
+
     in
-        NavTable;
+        CombinedobjectsToTable;
 
 
 CreateNavTableV3 = (num) as table => 
-     let
-
-         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
-
-
-
-         Content = {{ConvertToTable_SubTable2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{0}), ColumnNames{0}), "4", "4", "4"}}, 
-
-         expanded = Table.ToList(Table.ExpandTableColumn(Content, ColumnNames{0}, {ColumnNames{0}})),
-         
-         ActualData = #table(ColumnNames, expanded),
-
-
-         objects = #table(
-            {"Name",       "Key",        "Data",                           "ItemKind", "ItemName", "IsLeaf"},{
-            {Notion.NameOfDatabase(num),      "item1",      ActualData, "Table",    "Table",    true}
-
-            }),
-         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
-
-     in
-         NavTable;
-
-
-
-CreateNavTableV4 = (num) as table => 
     let
 
-
-
-
         ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
+        ColumnCount = Value.Subtract(List.Count(Table.ColumnNames(Notion.DatabaseRecords(num))), 1),
 
-        iterList = List.Generate(() => 3, each _ > -1, each _ - 1),
+        iterList = List.Generate(() => ColumnCount, each _ > -1, each _ - 1),
 
-        DataAddedUp = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{ConvertToTable_SubTable2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
+        ListOfTables = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
 
-        Data = #table(ColumnNames, DataAddedUp),
 
-        //on Nav
-        navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        table1 = ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{0}), ColumnNames{0}),
+        table2 = ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{1}), ColumnNames{1}),
 
-        navInsights = {{Notion.NameOfDatabase(num), 1, Data, "Table", "Table", true}},
+        joined = Table.AddJoinColumn(table1, "Notion_Key", table2, "Notion_Key", "Name"),
+
+
+        
+        navHeader    = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
+        navInsights = {{ColumnNames{0}, 0, GetDataFromListOfTables(ListOfTables{1}, ColumnNames{1}), "Table", "Table", true}} ,
 
         objects = #table(navHeader, navInsights),
 
         NavTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
         NavTable;
+
+        //ABOVE IS PROD
 
 
 shared ConvertToTable_SubTable2 = (database_records, name) =>
@@ -409,6 +412,21 @@ shared ConvertToTable_SubTable2 = (database_records, name) =>
         handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
         handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3,
         handle_types_check5 = if ending_column_names{0} = "number"       then HandleNumber(result_removed_type, name)      else handle_types_check4
+        
+        
+
+        
 
     in
         handle_types_check5;
+
+
+
+shared GetDataFromListOfTables = (listindex, name) =>
+    let
+        tabled = Table.FromList(listindex, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+        Columnnames = Table.ColumnNames(tabled),
+        Expanded = Table.ExpandTableColumn(tabled, "Column1", {"Notion_Key", name}, {"Notion_Key", "Data"})
+    in
+        Expanded;
