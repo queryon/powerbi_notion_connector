@@ -305,6 +305,8 @@ GetRowData = (table, RowIter, ColumnName) =>
     in
         end2;
 
+    
+
 CreateNavTableV4 = (num) as table => 
     let
 
@@ -320,36 +322,48 @@ CreateNavTableV4 = (num) as table =>
         objects = #table(navHeader, navInsights),
 
 
+        //Get Row Amount 
+        rowAmountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
 
+        //Get Column Amount 
+        columnAmountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
 
 
         //The start of the Join columns
-
         reveredColumnNames = List.Reverse(ColumnNames),
+
+
+        rowAmount = List.Generate(() => rowAmountBefore, each _ > -1, each _ - 1),
+
+        columnAmount = List.Generate(() => Value.Subtract(columnAmountBefore, 1), each _ > -1, each _ - 1),
+
+
+        CombinedJoinedColumnsTable_List = List.Accumulate(rowAmount, {}, (state, i_column) => 
+            state & {
+                List.Accumulate(columnAmount, {}, (state, i_row) =>  state & 
+                { 
+                GetRowData(objects{i_row}[Data], i_column, reveredColumnNames{i_row})
+
+                })
+
+            }
+            ),
+
+       // CombinedJoinedColumnsTable_List_old = List.Accumulate(iterListForCombined, {}, (state, i) => 
+        //    state & {{
+        //    GetRowData(objects{0}[Data], i, reveredColumnNames{0}), 
+        //    GetRowData(objects{1}[Data], i, reveredColumnNames{1}), 
+        //    GetRowData(objects{2}[Data], i, reveredColumnNames{2}), 
+        //    GetRowData(objects{3}[Data], i, reveredColumnNames{3}) 
+        //    }} ),
+
+
+
+
+        CombinedobjectsToTable = #table(ColumnNames, CombinedJoinedColumnsTable_List)
+
+
         
-        ListWithNotionKeyColumnHeaders = List.InsertRange(reveredColumnNames, 0, {"Notion_Key"}),
-
-        AmountOfSubsFroCombine = Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})),
-
-        iterListForCombined = List.Generate(() => 5, each _ > -1, each _ - 1),
-
-
-        //Combined = Table.AddJoinColumn(objects{0}[Data], "Notion_Key", objects{1}[Data], "Notion_Key", ColumnNames{0}),
-
-        CombinedJoinedColumnsTable_List = List.Accumulate(iterListForCombined, {}, (state, current) => 
-            state & {{ current, GetRowData(objects{0}[Data], current, reveredColumnNames{0}), GetRowData(objects{1}[Data], current, reveredColumnNames{1}), GetRowData(objects{2}[Data], current, reveredColumnNames{2}), GetRowData(objects{3}[Data], current, reveredColumnNames{3}) }} ),
-
-
-        CombinedobjectsToTable = #table(ListWithNotionKeyColumnHeaders, CombinedJoinedColumnsTable_List),
-
-        //Hard Code keep
-        Combined = Table.AddJoinColumn(objects{0}[Data], "Notion_Key", objects{1}[Data], "Notion_Key", ColumnNames{0}),
-
-        Combined1 = Table.AddJoinColumn(Combined, "Notion_Key", objects{2}[Data], "Notion_Key", ColumnNames{1}),
-
-        Combined2 = Table.AddJoinColumn(Combined1, "Notion_Key", objects{3}[Data], "Notion_Key", ColumnNames{2}),
-
-        Combined3 = Table.AddJoinColumn(Combined2, "Notion_Key", objects{4}[Data], "Notion_Key", ColumnNames{4})
 
     in
         CombinedobjectsToTable;
