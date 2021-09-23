@@ -199,12 +199,13 @@ shared ConvertToTable_SubTable = (database_records, name) =>
 
         //database_records_table_expanded_deeper = Table.ExpandRecordColumn(database_records_table_expanded, column_names{2}, column_names{2})
 
-        database_records_table_expanded_deeper = Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
 
-        result = if column_names{2} = "select" or column_names{2} = "number"  then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
+
+        result = if column_names{0} = "select" or column_names{2} = "number"  then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
 
         result_removed_id   = Table.RemoveColumns(result, "id"),
         result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
+        
 
         //after_removed_expand = Table.FromRecords(Table.Column(result_removed_type, "title")),
         ending_column_names = Table.ColumnNames(result_removed_type),
@@ -231,6 +232,73 @@ shared ConvertToTable_SubTable = (database_records, name) =>
         
     in
         expandedv2;
+
+shared ConvertToTable_SubTableV2 = (database_records, name) =>
+    let
+
+        database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+        database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
+
+        Removed = RemoveColumns(database_records_table_expanded),
+
+        //DisplayDups = ForEveryTableCheckForDup(Removed, name),
+
+        InitTextFields = CombinedInitText(Removed)
+
+    in
+        InitTextFields;
+
+shared GetPlainText = (database, num) =>
+    let
+        title1 = database{num},
+        plain_text = title1[plain_text]
+
+        
+    in
+        plain_text;
+
+shared RemoveColumns = (database) =>
+    let
+        Data = database,
+        RemovedColumns = Table.RemoveColumns(Data,{"id", "type"})
+    in
+        RemovedColumns;
+
+shared ForEveryTableCheckForDup = (database, name) =>
+    let
+
+        AddedTable = Table.AddColumn(database, "Duplicate Amount", each List.Count([title]))
+    in
+        AddedTable;
+
+shared CombinedInitText = (database) =>
+    let
+
+        CombinedTable  = Table.AddColumn(database, "First",       each GetPlainText([title], 0)),
+        CombinedTable1 = Table.AddColumn(CombinedTable, "Second", each GetPlainText([title], 1)),
+
+        ReplaceErrorsWithSpaces = Table.ReplaceErrorValues( CombinedTable1,  {"Second", " "}),
+
+        //CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "CombinedText", each Text.Combine({GetPlainText([title], 0), GetPlainText([title], 1)}))
+        CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "EndData", each Text.Combine({[First], [Second]}))
+
+        
+
+
+
+        
+    in
+        CombinedTable2;
+
+
+shared ForEveryTableCombineText = (database, name) =>
+    let
+
+        CombinedTable = Table.AddColumn(database, "Combined Text", each List.Count([title]))
+    in
+        CombinedTable;
+
 
 shared HandleMultiSelect = (database_table, name) =>
     let
@@ -295,7 +363,7 @@ CreateNavTableV4 = (num) as table =>
 
         navHeader = {"Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{ConvertToTable_SubTable(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
+            state & {{ConvertToTable_SubTableV2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
         objects = #table(navHeader, navInsights),
 
 
@@ -330,7 +398,7 @@ CreateNavTableV4 = (num) as table =>
 
 
     in
-        CombinedobjectsToTable;
+        objects{0}[Data];
 
 
 shared GetDataFromListOfTables = (listindex, name) =>
