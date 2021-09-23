@@ -233,71 +233,43 @@ shared ConvertToTable_SubTable = (database_records, name) =>
     in
         expandedv2;
 
+shared AddNotionKey = (database, name, SPECIFYNAME) =>
+    let
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
+
+    in
+        Expanded;
+
 shared ConvertToTable_SubTableV2 = (database_records, name) =>
     let
 
-        database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-
+        database_records_table          = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
         database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
 
-        Removed = RemoveColumns(database_records_table_expanded),
+        Database_RemovedColumns = RemoveUneccessaryColumns(database_records_table_expanded),
 
-        //DisplayDups = ForEveryTableCheckForDup(Removed, name),
+        Database_ColumnNames = Table.ColumnNames(Database_RemovedColumns),
 
-        InitTextFields = CombinedInitText(Removed)
+        Check_1 = if Database_ColumnNames{0} = "title"        then HandleTitleFormat(Database_RemovedColumns, name, "Data")              else null,
+        Check_2 = if Database_ColumnNames{0} = "number"       then HandleNumberFormat(Database_RemovedColumns, name, "number")           else Check_1,
+        Check_3 = if Database_ColumnNames{0} = "rich_text"    then HandleRichTextFormat(Database_RemovedColumns, name, "rich_text")      else Check_2,
+        Check_4 = if Database_ColumnNames{0} = "select"       then HandleSelectFormat(Database_RemovedColumns, name, "select")           else Check_3,
+        Check_5 = if Database_ColumnNames{0} = "checkbox"     then HandleCheckBoxFormat(Database_RemovedColumns, name, "checkbox")       else Check_4,
+        Check_6 = if Database_ColumnNames{0} = "multi_select" then HandleMultiSelectFormat(Database_RemovedColumns, name, "multi_select")   else Check_5
+
 
     in
-        InitTextFields;
-
-shared GetPlainText = (database, num) =>
-    let
-        title1 = database{num},
-        plain_text = title1[plain_text]
-
-        
-    in
-        plain_text;
-
-shared RemoveColumns = (database) =>
-    let
-        Data = database,
-        RemovedColumns = Table.RemoveColumns(Data,{"id", "type"})
-    in
-        RemovedColumns;
-
-shared ForEveryTableCheckForDup = (database, name) =>
-    let
-
-        AddedTable = Table.AddColumn(database, "Duplicate Amount", each List.Count([title]))
-    in
-        AddedTable;
-
-shared CombinedInitText = (database) =>
-    let
-
-        CombinedTable  = Table.AddColumn(database, "First",       each GetPlainText([title], 0)),
-        CombinedTable1 = Table.AddColumn(CombinedTable, "Second", each GetPlainText([title], 1)),
-
-        ReplaceErrorsWithSpaces = Table.ReplaceErrorValues( CombinedTable1,  {"Second", " "}),
-
-        //CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "CombinedText", each Text.Combine({GetPlainText([title], 0), GetPlainText([title], 1)}))
-        CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "EndData", each Text.Combine({[First], [Second]}))
-
-        
+        Check_6;
 
 
-
-        
-    in
-        CombinedTable2;
-
-
-shared ForEveryTableCombineText = (database, name) =>
-    let
-
-        CombinedTable = Table.AddColumn(database, "Combined Text", each List.Count([title]))
-    in
-        CombinedTable;
 
 
 shared HandleMultiSelect = (database_table, name) =>
@@ -398,7 +370,8 @@ CreateNavTableV4 = (num) as table =>
 
 
     in
-        objects{0}[Data];
+        CombinedobjectsToTable;
+        //objects{5}[Data];
 
 
 shared GetDataFromListOfTables = (listindex, name) =>
@@ -407,5 +380,233 @@ shared GetDataFromListOfTables = (listindex, name) =>
 
         Columnnames = Table.ColumnNames(tabled),
         Expanded = Table.ExpandTableColumn(tabled, "Column1", {"Notion_Key", name}, {"Notion_Key", "Data"})
+    in
+        Expanded;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//Handle title Text ----------------------------------------------------------------------------------------------------
+
+shared GetPlainText = (database, num) =>
+    let
+        title1 = database{num},
+        plain_text = title1[plain_text]
+
+        
+    in
+        plain_text;
+
+shared RemoveUneccessaryColumns = (database) =>
+    let
+        Data = database,
+        RemovedColumns = Table.RemoveColumns(Data,{"id", "type"})
+    in
+        RemovedColumns;
+
+shared ForEveryTableCheckForDup = (database, name) =>
+    let
+
+        AddedTable = Table.AddColumn(database, "Duplicate Amount", each List.Count([title]))
+    in
+        AddedTable;
+
+shared HandleTitleFormat = (database, name, SPECIFYNAME) =>
+    let
+
+        CombinedTable  = Table.AddColumn(database, "First",       each GetPlainText([title], 0)), //temp create columns to add things together 
+        CombinedTable1 = Table.AddColumn(CombinedTable, "Second", each GetPlainText([title], 1)),
+
+        ReplaceErrorsWithSpaces = Table.ReplaceErrorValues( CombinedTable1,  {"Second", " "}),
+
+        CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "Data", each Text.Combine({[First], [Second]})),
+
+        RemoveFirst  = Table.RemoveColumns(CombinedTable2, {"First", "Second"} ), //remove temp columns
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        
+        //Add Key
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, RemoveFirst{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
+        
+    in
+        Expanded;
+
+
+//Handle Number Format ----------------------------------------------------------------------------------------------------
+
+
+shared HandleNumberFormat = (database, name, SPECIFYNAME ) =>
+    let
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
+
+    in
+        Expanded;
+
+
+
+
+//Handle Rich Text Format ----------------------------------------------------------------------------------------------------
+
+shared HandleRichTextFormat = (database, name, SPECIFYNAME ) =>
+    let
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name}),
+
+        ExpandedWorkScore = Table.ExpandListColumn(Expanded, name),
+        ExpandedWorkScore1 = Table.ExpandRecordColumn(ExpandedWorkScore, name, {"plain_text"}, {name})
+
+    in
+        ExpandedWorkScore1;
+
+//Handle Select Format ----------------------------------------------------------------------------------------------------
+
+
+shared HandleSelectFormat = (database, name, SPECIFYNAME ) =>
+    let
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name}),
+        Expanded2 = Table.ExpandRecordColumn(Expanded, name, {"name"}, {name})
+
+    in
+        Expanded2;
+
+
+
+//Handle CheckBox Format ----------------------------------------------------------------------------------------------------
+
+
+shared HandleCheckBoxFormat = (database, name, SPECIFYNAME ) =>
+    let
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
+
+    in
+        Expanded;
+
+
+
+//Handle Multi Select ----------------------------------------------------------------------------------------------------
+
+shared GetElementInList = (NumberOfMultiSelect, Field) =>
+    let
+
+        iterList = List.Generate(() =>  Value.Subtract(NumberOfMultiSelect, 1), each _ > -1, each _ - 1),
+     
+        ListOfSelected = List.Accumulate(iterList, {}, (state, current) => state & {{Field{current}}}),
+
+        ToTable = Table.FromList(ListOfSelected, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+        ToTableExpand = Table.ExpandListColumn(ToTable, "Column1"),
+        ToExpanndRecord = Table.ExpandRecordColumn(ToTableExpand, "Column1", {"name"}, {"Column1.name"})
+
+        
+
+    in
+        Text.Combine(Table.ToList(ToExpanndRecord), ", ");
+        
+
+    //Source = Notion.Navigation(),
+    //#"d18e405c-fce1-481c-9613-6d00c4afa679" = Source{[Key="d18e405c-fce1-481c-9613-6d00c4afa679"]}[Data],
+    //Combined_List = #"d18e405c-fce1-481c-9613-6d00c4afa679"{7}[Combined_List],
+    //#"Converted to Table" = Table.FromList(Combined_List, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    //#"Expanded Column1" = Table.ExpandListColumn(#"Converted to Table", "Column1"),
+    //#"Expanded Column2" = Table.ExpandRecordColumn(#"Expanded Column1", "Column1", {"name"}, {"Column1.name"})
+    
+    //in
+
+    //Text.Combine(Table.ToList(#"Expanded Column2"), ", ")
+
+shared HandleMultiSelectFormat = (database, name, SPECIFYNAME) =>
+    let
+
+        CombinedTable2 = Table.AddColumn(database, "Combined_List", each GetElementInList(List.Count([multi_select]), [multi_select])),
+        RemoveUneccessary = Table.RemoveColumns(CombinedTable2, "multi_select"),
+
+        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+
+        navHeader = {"Notion_Key", "Data"}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, RemoveUneccessary{current}}} ),
+        objects = #table(navHeader, navInsights),
+
+        Expanded = Table.ExpandRecordColumn(objects, "Data", {"Combined_List"}, {name})
+
     in
         Expanded;
