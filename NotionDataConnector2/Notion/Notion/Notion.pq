@@ -11,7 +11,7 @@ shared Notion.Navigation = () =>
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
         //navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  Notion.DatabaseContents(Notion.DatabaseID(current)), "Folder",    "Table",    true}}),
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTableV4(current), "Folder",    "Table",    true}}),
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTable(current), "Folder",    "Table",    true}}),
 
         objects = #table(navHeader, navInsights),
 
@@ -188,51 +188,6 @@ shared Notion.DatabasePropertiesRecordCount = (num) =>
     in
         properties;
 
-shared ConvertToTable_SubTable = (database_records, name) =>
-    let
-
-        database_records_table = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-
-        database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
-
-        column_names = Table.ColumnNames(database_records_table_expanded),
-
-        //database_records_table_expanded_deeper = Table.ExpandRecordColumn(database_records_table_expanded, column_names{2}, column_names{2})
-
-
-
-        result = if column_names{0} = "select" or column_names{2} = "number"  then database_records_table_expanded else Table.ExpandListColumn(database_records_table_expanded, column_names{2}),
-
-        result_removed_id   = Table.RemoveColumns(result, "id"),
-        result_removed_type = Table.RemoveColumns(result_removed_id, "type"),
-        
-
-        //after_removed_expand = Table.FromRecords(Table.Column(result_removed_type, "title")),
-        ending_column_names = Table.ColumnNames(result_removed_type),
-
-        //handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else Text.Combine({"Error 001, This fromat isnt currently supported :  ", ending_column_names{0}}),
-        handle_types_check1 = if ending_column_names{0} = "multi_select" then HandleMultiSelect(result_removed_type, name) else null,
-        handle_types_check2 = if ending_column_names{0} = "rich_text"    then HandleRichText(result_removed_type, name)    else handle_types_check1,
-        handle_types_check3 = if ending_column_names{0} = "title"        then HandleTitle(result_removed_type, name)       else handle_types_check2,
-        handle_types_check4 = if ending_column_names{0} = "select"       then HandleSelect(result_removed_type, name)      else handle_types_check3,
-        handle_types_check5 = if ending_column_names{0} = "number"       then HandleNumber(result_removed_type, name)      else handle_types_check4,
-        handle_types_check6 = if ending_column_names{0} = "checkbox"     then HandleCheckBox(result_removed_type, name)    else handle_types_check5,
-
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(handle_types_check6), 1), each _ > -1, each _ - 1),
-
-        navHeader = {"Notion_Key", "Data"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{current, handle_types_check6{current}}} ),
-        objects = #table(navHeader, navInsights),
-
-
-        expandedv2 = if ending_column_names{0} = "number"   then Table.ExpandRecordColumn(objects, "Data", {"number"}, {name})   else Table.ExpandRecordColumn(objects, "Data", {name}, {name})
-       
-
-        
-    in
-        expandedv2;
-
 shared AddNotionKey = (database, name, SPECIFYNAME) =>
     let
 
@@ -270,8 +225,6 @@ shared ConvertToTable_SubTableV2 = (database_records, name) =>
         Check_6;
 
 
-
-
 shared HandleMultiSelect = (database_table, name) =>
     let
         Expanded = Table.ExpandRecordColumn(database_table, "multi_select", {"id", "name", "color"}, {"multi_select.id", name, "multi_select.color"}),
@@ -282,37 +235,6 @@ shared HandleMultiSelect = (database_table, name) =>
     in
         Expanded;
 
-shared HandleRichText = (database_table, name) =>
-    let
-        Expanded = Table.ExpandRecordColumn(database_table, "rich_text", {"plain_text"}, {name})
-    in
-        Expanded;
-
-shared HandleTitle = (database_table, name) =>
-    let
-        
-        Expanded = Table.ExpandRecordColumn(database_table, "title", {"plain_text"}, {name})
-    in
-        Expanded;
-
-shared HandleSelect = (database_table, name) =>
-    let
-        Expanded = Table.ExpandRecordColumn(database_table, "select", {"name"}, {name})
-    in
-        Expanded;
-
-shared HandleNumber = (database_table, name) =>
-    let
-        Expanded = Table.ExpandRecordColumn(database_table, "number", {"number"}, {name})
-    in
-        database_table;
-
-shared HandleCheckBox = (database_table, name) =>
-    let
-        Expanded = Table.ExpandRecordColumn(database_table, "checkbox", {"checkbox"}, {name})
-
-    in
-        database_table;
 
 GetRowData = (table, RowIter, ColumnName) =>
     let
@@ -322,13 +244,39 @@ GetRowData = (table, RowIter, ColumnName) =>
     in
         end2;
 
-    
 
-CreateNavTableV4 = (num) as table => 
+GetDatatype = (database_records, num) =>
     let
 
-        ColumnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
+        database_records_table          = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+        database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
+        Database_RemovedColumns = RemoveUneccessaryColumns(database_records_table_expanded),
+        Database_ColumnNames = Table.ColumnNames(Database_RemovedColumns),
+
+
+        Check_1 = if Database_ColumnNames{0} = "title"        then type text    else type text,
+        Check_2 = if Database_ColumnNames{0} = "number"       then Int64.Type   else Check_1,
+        Check_3 = if Database_ColumnNames{0} = "rich_text"    then type text    else Check_2,
+        Check_4 = if Database_ColumnNames{0} = "select"       then type text    else Check_3,
+        Check_5 = if Database_ColumnNames{0} = "checkbox"     then type logical else Check_4,
+        Check_6 = if Database_ColumnNames{0} = "multi_select" then type text    else Check_5
+
+
+    in
+        Check_6;
+
+CreateNavTable = (num) as table => 
+    let
+
+        ColumnNames     = Table.ColumnNames(Notion.DatabaseRecords(num)),
+
+        //Get Data Types
+        DataTypeListiterListAmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+        DataTypeListiterList = List.Generate(() => DataTypeListiterListAmountOfSubs2, each _ > -1, each _ - 1),
+        DataTypeList = List.Accumulate(DataTypeListiterList, {}, (state, current) => state &  {GetDatatype(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}),
+   
+       
         AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
 
         iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
@@ -339,8 +287,13 @@ CreateNavTableV4 = (num) as table =>
         objects = #table(navHeader, navInsights),
 
 
+
+        //------------------------
+
+
+
         //Get Row Amount 
-        rowAmountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
+        rowAmountBefore = Value.Subtract(Table.RowCount(objects), 1),
 
         //Get Column Amount 
         columnAmountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
@@ -359,19 +312,31 @@ CreateNavTableV4 = (num) as table =>
             state & {
                 List.Accumulate(columnAmount, {}, (state, i_row) =>  state & 
                 { 
-                GetRowData(objects{i_row}[Data], i_column, reveredColumnNames{i_row})
-
+                    GetRowData(objects{i_row}[Data], i_column, reveredColumnNames{i_row})
                 })
+            }),
 
-            }
-            ),
 
-        CombinedobjectsToTable = #table(ColumnNames, CombinedJoinedColumnsTable_List)
+        CombinedobjectsToTable = #table(ColumnNames, CombinedJoinedColumnsTable_List),
+
+        CreateTransformColumnTypesList_Iter = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
+        CreateTransformColumnTypesList      = List.Accumulate(CreateTransformColumnTypesList_Iter, {}, (state, current) =>  state & {{     reveredColumnNames{current}, DataTypeList{current}     }} ),
+
+        Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, CreateTransformColumnTypesList)
+
+
+        //Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, {reveredColumnNames{0}, DataTypeList{0}}),
+        //Correction1 = Table.TransformColumnTypes(Correction0, {reveredColumnNames{1}, DataTypeList{1}}),
+        //Correction2 = Table.TransformColumnTypes(Correction1, {reveredColumnNames{2}, DataTypeList{2}}),
+        //Correction3 = Table.TransformColumnTypes(Correction2, {reveredColumnNames{3}, DataTypeList{3}}),
+        //Correction4 = Table.TransformColumnTypes(Correction3, {reveredColumnNames{4}, DataTypeList{4}}),
+        //Correction5 = Table.TransformColumnTypes(Correction4, {reveredColumnNames{5}, DataTypeList{5}})
 
 
     in
-        CombinedobjectsToTable;
-        //objects{5}[Data];
+        Correction0;
+        //CombinedobjectsToTable;
+        //objects{4}[Data];
 
 
 shared GetDataFromListOfTables = (listindex, name) =>
@@ -495,6 +460,7 @@ shared HandleNumberFormat = (database, name, SPECIFYNAME ) =>
         objects = #table(navHeader, navInsights),
 
         Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
+
 
     in
         Expanded;
