@@ -10,7 +10,7 @@ shared Notion.Navigation = () =>
         iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTable(current), "Folder",    "Table",    true}}),
+        navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{GetNameOfTable(current),  Notion.DatabaseID(current),  CreateNavTable(current), "Folder",    "Table",    true}}),
 
         objects = #table(navHeader, navInsights),
 
@@ -126,7 +126,7 @@ shared Notion.NameOfDatabase = (num) =>
         title1 = title{0},
         plain_text = title1[plain_text]
     in
-        plain_text;
+        title;
 
 shared Notion.DatabaseID = (num) =>
     let
@@ -490,6 +490,35 @@ shared HandleCheckBoxFormat = (database, name, SPECIFYNAME ) =>
         Expanded;
 
 
+
+//Handle Getting Title of Table-------------------------------------------------------------------------------------------
+//This function was implemented because Titles of databases were getting cut off from spaces and special characters
+
+shared GetNameOfTable = (num) =>
+    let
+
+        Source = Notion.Navigation(),
+        Notion.NameOfDatabase = Notion.HeaderContents(),
+        #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
+        results = #"Imported JSON"[results],
+
+        results1 = results{num},
+        title = results1[title],
+
+        Count = List.Count(title),
+
+        text = if Count = 2 then Text.Combine({title{0}[plain_text], title{1}[plain_text]}) else title{0}[plain_text],
+        
+        title1 = title{0},
+
+        CountOf = Table.RowCount(title),
+
+        Check_2 = Text.Combine({title{0}[plain_text], title{1}[plain_text]}),
+
+        plain_text = title1[plain_text]
+
+    in
+        text;
 
 //Handle Multi Select ----------------------------------------------------------------------------------------------------
 
