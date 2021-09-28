@@ -10,7 +10,6 @@ shared Notion.Navigation = () =>
         iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
 
         navHeader = {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"}, 
-        //navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  Notion.DatabaseContents(Notion.DatabaseID(current)), "Folder",    "Table",    true}}),
         navInsights = List.Accumulate(iterList, {}, (state, current) => state & {{Notion.NameOfDatabase(current),  Notion.DatabaseID(current),  CreateNavTable(current), "Folder",    "Table",    true}}),
 
         objects = #table(navHeader, navInsights),
@@ -159,11 +158,8 @@ shared Notion.DatabaseRecords = (num) =>
 
         table_PropertiesExpanded = Table.FromRecords(Table.Column(table_expandColumn1, "Column1.properties")),
 
-        //ThisIsNull = #table({})
-
         list_PropertiesExpandedColumnName = Table.ColumnNames(table_PropertiesExpanded)
         
-        //list_PropertiesExpandedColumnName1 = List.Generate(() => 1, each _ < 10, each _ + 1)
     in
         table_PropertiesExpanded;
 
@@ -219,7 +215,6 @@ shared ConvertToTable_SubTableV2 = (database_records, name) =>
         Check_4 = if Database_ColumnNames{0} = "select"       then HandleSelectFormat(Database_RemovedColumns, name, "select")           else Check_3,
         Check_5 = if Database_ColumnNames{0} = "checkbox"     then HandleCheckBoxFormat(Database_RemovedColumns, name, "checkbox")       else Check_4,
         Check_6 = if Database_ColumnNames{0} = "multi_select" then HandleMultiSelectFormat(Database_RemovedColumns, name, "multi_select")   else Check_5
-
 
     in
         Check_6;
@@ -293,7 +288,7 @@ CreateNavTable = (num) as table =>
 
 
         //Get Row Amount 
-        rowAmountBefore = Value.Subtract(Table.RowCount(objects), 1),
+        rowAmountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
 
         //Get Column Amount 
         columnAmountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
@@ -324,19 +319,8 @@ CreateNavTable = (num) as table =>
 
         Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, CreateTransformColumnTypesList)
 
-
-        //Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, {reveredColumnNames{0}, DataTypeList{0}}),
-        //Correction1 = Table.TransformColumnTypes(Correction0, {reveredColumnNames{1}, DataTypeList{1}}),
-        //Correction2 = Table.TransformColumnTypes(Correction1, {reveredColumnNames{2}, DataTypeList{2}}),
-        //Correction3 = Table.TransformColumnTypes(Correction2, {reveredColumnNames{3}, DataTypeList{3}}),
-        //Correction4 = Table.TransformColumnTypes(Correction3, {reveredColumnNames{4}, DataTypeList{4}}),
-        //Correction5 = Table.TransformColumnTypes(Correction4, {reveredColumnNames{5}, DataTypeList{5}})
-
-
     in
         Correction0;
-        //CombinedobjectsToTable;
-        //objects{4}[Data];
 
 
 shared GetDataFromListOfTables = (listindex, name) =>
@@ -347,25 +331,6 @@ shared GetDataFromListOfTables = (listindex, name) =>
         Expanded = Table.ExpandTableColumn(tabled, "Column1", {"Notion_Key", name}, {"Notion_Key", "Data"})
     in
         Expanded;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -465,9 +430,6 @@ shared HandleNumberFormat = (database, name, SPECIFYNAME ) =>
     in
         Expanded;
 
-
-
-
 //Handle Rich Text Format ----------------------------------------------------------------------------------------------------
 
 shared HandleRichTextFormat = (database, name, SPECIFYNAME ) =>
@@ -547,18 +509,6 @@ shared GetElementInList = (NumberOfMultiSelect, Field) =>
     in
         Text.Combine(Table.ToList(ToExpanndRecord), ", ");
         
-
-    //Source = Notion.Navigation(),
-    //#"d18e405c-fce1-481c-9613-6d00c4afa679" = Source{[Key="d18e405c-fce1-481c-9613-6d00c4afa679"]}[Data],
-    //Combined_List = #"d18e405c-fce1-481c-9613-6d00c4afa679"{7}[Combined_List],
-    //#"Converted to Table" = Table.FromList(Combined_List, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-    //#"Expanded Column1" = Table.ExpandListColumn(#"Converted to Table", "Column1"),
-    //#"Expanded Column2" = Table.ExpandRecordColumn(#"Expanded Column1", "Column1", {"name"}, {"Column1.name"})
-    
-    //in
-
-    //Text.Combine(Table.ToList(#"Expanded Column2"), ", ")
-
 shared HandleMultiSelectFormat = (database, name, SPECIFYNAME) =>
     let
 
