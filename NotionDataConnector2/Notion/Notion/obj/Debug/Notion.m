@@ -169,20 +169,11 @@ shared Notion.DatabaseProperties = (num) =>
         Notion.NameOfDatabase = Notion.DatabaseContents(Notion.DatabaseID(num)),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results],
-        results1 = results{num},
+        results1 = results{0},
         properties = results1[properties]
     in
         properties;
 
-shared Notion.DatabasePropertiesRecordCount = (num) =>
-    let
-        Notion.NameOfDatabase = Notion.DatabaseContents(Notion.DatabaseID(num)),
-        #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
-        results = #"Imported JSON"[results],
-        results1 = results{num},
-        properties = results1[properties]
-    in
-        properties;
 
 shared AddNotionKey = (database, name, SPECIFYNAME) =>
     let
@@ -509,7 +500,6 @@ shared GetNameOfTable = (num) =>
 
         text = if Count = 2 then Text.Combine({title{0}[plain_text], title{1}[plain_text]}) else title{0}[plain_text],
         
-
         title1 = title{0},
 
         CountOf = Table.RowCount(title),
@@ -517,8 +507,6 @@ shared GetNameOfTable = (num) =>
         Check_2 = Text.Combine({title{0}[plain_text], title{1}[plain_text]}),
 
         plain_text = title1[plain_text]
-
-
 
     in
         text;

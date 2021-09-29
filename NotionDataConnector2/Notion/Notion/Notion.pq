@@ -169,20 +169,11 @@ shared Notion.DatabaseProperties = (num) =>
         Notion.NameOfDatabase = Notion.DatabaseContents(Notion.DatabaseID(num)),
         #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
         results = #"Imported JSON"[results],
-        results1 = results{num},
+        results1 = results{0},
         properties = results1[properties]
     in
         properties;
 
-shared Notion.DatabasePropertiesRecordCount = (num) =>
-    let
-        Notion.NameOfDatabase = Notion.DatabaseContents(Notion.DatabaseID(num)),
-        #"Imported JSON" = Json.Document(Notion.NameOfDatabase,65001),
-        results = #"Imported JSON"[results],
-        results1 = results{num},
-        properties = results1[properties]
-    in
-        properties;
 
 shared AddNotionKey = (database, name, SPECIFYNAME) =>
     let
