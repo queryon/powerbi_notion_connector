@@ -23,7 +23,14 @@ FullPathForConnector = DocumentsPath + "\Power Bi Desktop\Custom Connectors"
 CurrentPath          = os.path.dirname(os.path.realpath(__file__))
 CurrentPathWithMez   = CurrentPath + "\\Notion.mez"
 
-newPath = shutil.copy(CurrentPathWithMez, FullPathForConnector)
+
+CheckForNotionMEZ = os.path.exists(FullPathForConnector + "\\Notion.mex")
+if(CheckForNotionMEZ == False):   
+    newPath = shutil.copy(CurrentPathWithMez, FullPathForConnector)
+else:
+    os.remove(FullPathForConnector + "\\Notion.mex")
+    os.remove(CurrentPathWithMez)
+
 
 ctypes.windll.user32.MessageBoxW(0, "The Notion to Power Bi Connector by Queryon was sucessfully installed! Please Visit Queryon.com/notion for instructions on how to use this connector.", "Notion to Power Bi Connector", 1)
 
