@@ -9,6 +9,8 @@ You can also use https://github.com/microsoft/DataConnectors to help with the se
 
 When doing this you can compile this code and make contributions using visual studio. All file edits will be made in `Notion.pq`
 
+Make sure your compiled file is in the correct directory `[Documents]\Power BI Desktop\Custom Connectors` More info can be found on that here https://github.com/microsoft/DataConnectors
+
 ## Usage
 
 Follow the [Queryon Youtube Video on our website](https://queryon.com/notion/) to set up this connector locally from the Exe version.
