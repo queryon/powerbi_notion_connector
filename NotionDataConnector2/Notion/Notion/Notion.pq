@@ -4,7 +4,6 @@ section Notion;
 [DataSource.Kind="Notion", Publish="Notion.Publish"]
 
 shared Notion.Navigation = () =>
-
     let
 
         iterList = List.Generate(() =>  Value.Subtract(Notion.AmountOfDatabases(), 1), each _ > -1, each _ - 1),
@@ -86,24 +85,45 @@ shared Notion.HeaderContents = () =>
     in
         request;
 
-shared Notion.DatabaseContents = (database_id) =>
+shared Notion.DatabaseContents = (database_id, optional start_cursor as nullable text) =>
     let
         first_part_of_url = Text.Combine({"https://api.notion.com/v1/databases/", database_id}),
         last_part_of_url  = Text.Combine({first_part_of_url, "/query"}),
         url = last_part_of_url,
         apiKey = Extension.CurrentCredential()[Key],
         headers = [
-            
             #"Authorization"  = Text.Combine({"Bearer ", apiKey}),
             #"Content-Type"   = "application/json ; charset=utf-8",
             #"Notion-Version" = "2021-08-16"
         ],
-        
-  
-        request = Web.Contents(url, [ Headers = headers, ManualCredentials = true , Content = Text.ToBinary("")])
+        body = if start_cursor = null then "{}" else Text.Format("{""start_cursor"": ""#{0}""}", {start_cursor}),
+        request = Web.Contents(url, [ Headers = headers, ManualCredentials = true, Content = Text.ToBinary(body)])
     in
         request;
 
+shared Notion.GetAllDatabaseRecords = (database_id) =>
+    let
+        GetPage = (cursor as nullable text) =>
+            let
+                response = Json.Document(Notion.DatabaseContents(database_id, cursor)),
+                results = response[results],
+                next_cursor = response[next_cursor]?
+            in
+                [Results = results, NextCursor = next_cursor],
+        
+        GetAllPages = (cursor as nullable text) =>
+            let
+                page = GetPage(cursor),
+                results = page[Results],
+                next_cursor = page[NextCursor],
+                more_results = if next_cursor <> null then @GetAllPages(next_cursor) else {},
+                all_results = results & more_results
+            in
+                all_results,
+        
+        AllRecords = GetAllPages(null)
+    in
+        AllRecords;
 
 shared Notion.AmountOfDatabases = () =>
     let
@@ -144,25 +164,13 @@ shared Notion.DatabaseRecords = (num) =>
     let
 
         database_id = Notion.DatabaseID(num),
-
-        Notion.DatabaseContents0 = Notion.DatabaseContents(database_id),
-        #"Imported JSON" = Json.Document(Notion.DatabaseContents0,65001),
-        #"Converted to Table" = Table.FromList(Notion.DatabaseContents0, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-
-
-
-        list_results = #"Imported JSON"[results],
+        list_results = Notion.GetAllDatabaseRecords(database_id),
         table_toTable = Table.FromList(list_results, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-
         table_expandColumn1 = Table.ExpandRecordColumn(table_toTable, "Column1", {"properties"}, {"Column1.properties"}),
-
         table_PropertiesExpanded = Table.FromRecords(Table.Column(table_expandColumn1, "Column1.properties")),
-
         list_PropertiesExpandedColumnName = Table.ColumnNames(table_PropertiesExpanded)
-        
     in
         table_PropertiesExpanded;
-
 
 shared Notion.DatabaseProperties = (num) =>
     let
@@ -254,62 +262,43 @@ GetDatatype = (database_records, num) =>
 
 CreateNavTable = (num) as table => 
     let
-
+        // Get the original column names
         ColumnNames     = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
-        //Get Data Types
+        // Get Data Types
         DataTypeListiterListAmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
-        DataTypeListiterList = List.Generate(() => DataTypeListiterListAmountOfSubs2, each _ > -1, each _ - 1),
+        DataTypeListiterList = List.Generate(() => 0, each _ <= DataTypeListiterListAmountOfSubs2, each _ + 1),
         DataTypeList = List.Accumulate(DataTypeListiterList, {}, (state, current) => state &  {GetDatatype(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}),
    
-       
         AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
-
-        iterList = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ <= AmountOfSubs2, each _ + 1),
 
         navHeader = {"Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{ConvertToTable_SubTableV2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}} ),
+            state & {{ConvertToTable_SubTableV2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}}),
         objects = #table(navHeader, navInsights),
 
-
-
-        //------------------------
-
-
-
-        //Get Row Amount 
         rowAmountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
-
-        //Get Column Amount 
         columnAmountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
 
 
-        //The start of the Join columns
-        reveredColumnNames = List.Reverse(ColumnNames),
+        rowAmount = List.Generate(() => 0, each _ <= rowAmountBefore, each _ + 1),
+        columnAmount = List.Generate(() => 0, each _ < columnAmountBefore, each _ + 1),
 
-
-        rowAmount = List.Generate(() => rowAmountBefore, each _ > -1, each _ - 1),
-
-        columnAmount = List.Generate(() => Value.Subtract(columnAmountBefore, 1), each _ > -1, each _ - 1),
-
-
-        CombinedJoinedColumnsTable_List = List.Accumulate(rowAmount, {}, (state, i_column) => 
+        CombinedJoinedColumnsTable_List = List.Accumulate(rowAmount, {}, (state, i_row) => 
             state & {
-                List.Accumulate(columnAmount, {}, (state, i_row) =>  state & 
+                List.Accumulate(columnAmount, {}, (state, i_column) =>  state & 
                 { 
-                    GetRowData(objects{i_row}[Data], i_column, reveredColumnNames{i_row})
+                    GetRowData(objects{i_column}[Data], i_row, ColumnNames{i_column})
                 })
             }),
 
-
         CombinedobjectsToTable = #table(ColumnNames, CombinedJoinedColumnsTable_List),
 
-        CreateTransformColumnTypesList_Iter = List.Generate(() => AmountOfSubs2, each _ > -1, each _ - 1),
-        CreateTransformColumnTypesList      = List.Accumulate(CreateTransformColumnTypesList_Iter, {}, (state, current) =>  state & {{     reveredColumnNames{current}, DataTypeList{current}     }} ),
+        CreateTransformColumnTypesList_Iter = List.Generate(() => 0, each _ <= AmountOfSubs2, each _ + 1),
+        CreateTransformColumnTypesList = List.Accumulate(CreateTransformColumnTypesList_Iter, {}, (state, current) => state & {{ColumnNames{current}, DataTypeList{current}}}),
 
         Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, CreateTransformColumnTypesList)
-
     in
         Correction0;
 
@@ -378,28 +367,35 @@ shared ForEveryTableCheckForDup = (database, name) =>
 
 shared HandleTitleFormat = (database, name, SPECIFYNAME) =>
     let
+        // Helper function to safely get plain text
+        SafeGetPlainText = (title, index) => 
+            if title = null then null
+            else if List.IsEmpty(title) then null
+            else if index >= List.Count(title) then null
+            else title{index}[plain_text]?,
 
-        CombinedTable  = Table.AddColumn(database, "First",       each GetPlainText([title], 0)), //temp create columns to add things together 
-        CombinedTable1 = Table.AddColumn(CombinedTable, "Second", each GetPlainText([title], 1)),
+        // Add columns for first and second title parts
+        CombinedTable = Table.AddColumn(database, "First", each SafeGetPlainText([title], 0)),
+        CombinedTable1 = Table.AddColumn(CombinedTable, "Second", each SafeGetPlainText([title], 1)),
 
-        ReplaceErrorsWithSpaces = Table.ReplaceErrorValues( CombinedTable1,  {"Second", " "}),
+        // Combine first and second parts, replacing null with empty string
+        CombinedTable2 = Table.AddColumn(CombinedTable1, "Data", each 
+            Text.Combine({[First]?, [Second]?}, ""),
+            type text),
 
-        CombinedTable2 = Table.AddColumn(ReplaceErrorsWithSpaces, "Data", each Text.Combine({[First], [Second]})),
+        // Remove temporary columns
+        RemoveTemp = Table.RemoveColumns(CombinedTable2, {"First", "Second", "title"}),
 
-        RemoveFirst  = Table.RemoveColumns(CombinedTable2, {"First", "Second"} ), //remove temp columns
+        // Add Notion_Key column
+        WithKey = Table.AddIndexColumn(RemoveTemp, "Notion_Key", 0, 1),
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
-        
-        //Add Key
-        navHeader = {"Notion_Key", "Data"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{current, RemoveFirst{current}}} ),
-        objects = #table(navHeader, navInsights),
+        // Rename the "Data" column to the specified name
+        RenamedColumns = Table.RenameColumns(WithKey, {{"Data", name}}),
 
-        Expanded = Table.ExpandRecordColumn(objects, "Data", {SPECIFYNAME}, {name})
-        
+        // Reorder columns to match expected output
+        ReorderedColumns = Table.ReorderColumns(RenamedColumns, {"Notion_Key", name})
     in
-        Expanded;
+        ReorderedColumns;
 
 
 //Handle Number Format ----------------------------------------------------------------------------------------------------
