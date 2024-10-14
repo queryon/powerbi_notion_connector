@@ -262,45 +262,73 @@ GetDatatype = (database_records, num) =>
 
 CreateNavTable = (num) as table => 
     let
-        // Get the original column names
-        ColumnNames     = Table.ColumnNames(Notion.DatabaseRecords(num)),
+        // Get column names from the database records
+        columnNames = Table.ColumnNames(Notion.DatabaseRecords(num)),
 
         // Get Data Types
-        DataTypeListiterListAmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
-        DataTypeListiterList = List.Generate(() => 0, each _ <= DataTypeListiterListAmountOfSubs2, each _ + 1),
-        DataTypeList = List.Accumulate(DataTypeListiterList, {}, (state, current) => state &  {GetDatatype(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}),
+        totalPropertiesCount = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+        dataTypeIteratorList = List.Generate(() => totalPropertiesCount, each _ > -1, each _ - 1),
+        dataTypeList = List.Accumulate(
+            dataTypeIteratorList, 
+            {}, 
+            (state, current) => state & {GetDatatype(Table.Column(Notion.DatabaseRecords(num), columnNames{current}), columnNames{current})}
+        ),
    
-        AmountOfSubs2 = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
-        iterList = List.Generate(() => 0, each _ <= AmountOfSubs2, each _ + 1),
-
-        navHeader = {"Data"}, 
-        navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{ConvertToTable_SubTableV2(Table.Column(Notion.DatabaseRecords(num), ColumnNames{current}), ColumnNames{current})}}),
+        // Prepare to create navigation insights
+        totalColumnsCount = Value.Subtract(Table.ColumnCount(Table.FromRecords({Notion.DatabaseProperties(num)})), 1),
+        columnIteratorList = List.Generate(() => totalColumnsCount, each _ > -1, each _ - 1),
+        navHeader = {"Data"},
+        navInsights = List.Accumulate(
+            columnIteratorList, 
+            {}, 
+            (state, current) => state & {{ConvertToTable_SubTableV2(Table.Column(Notion.DatabaseRecords(num), columnNames{current}), columnNames{current})}}
+        ),
         objects = #table(navHeader, navInsights),
 
-        rowAmountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
-        columnAmountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
+        //------------------------
 
+        // Get Row Amount 
+        rowCountBefore = Value.Subtract(Table.RowCount(objects{0}[Data]), 1),
 
-        rowAmount = List.Generate(() => 0, each _ <= rowAmountBefore, each _ + 1),
-        columnAmount = List.Generate(() => 0, each _ < columnAmountBefore, each _ + 1),
+        // Get Column Amount 
+        columnCountBefore = Table.ColumnCount(Notion.DatabaseRecords(num)),
 
-        CombinedJoinedColumnsTable_List = List.Accumulate(rowAmount, {}, (state, i_row) => 
-            state & {
-                List.Accumulate(columnAmount, {}, (state, i_column) =>  state & 
-                { 
-                    GetRowData(objects{i_column}[Data], i_row, ColumnNames{i_column})
-                })
-            }),
+        // Reverse column names to start joining columns
+        reversedColumnNames = List.Reverse(columnNames),
 
-        CombinedobjectsToTable = #table(ColumnNames, CombinedJoinedColumnsTable_List),
+        rowIteratorList = List.Generate(() => rowCountBefore, each _ > -1, each _ - 1),
+        columnIteratorList2 = List.Generate(() => Value.Subtract(columnCountBefore, 1), each _ > -1, each _ - 1),
 
-        CreateTransformColumnTypesList_Iter = List.Generate(() => 0, each _ <= AmountOfSubs2, each _ + 1),
-        CreateTransformColumnTypesList = List.Accumulate(CreateTransformColumnTypesList_Iter, {}, (state, current) => state & {{ColumnNames{current}, DataTypeList{current}}}),
+        // Combine and join columns to create the final table
+        combinedJoinedColumnsTableList = List.Accumulate(
+            rowIteratorList, 
+            {}, 
+            (state, currentRow) => state & {
+                List.Accumulate(
+                    columnIteratorList2, 
+                    {}, 
+                    (innerState, currentColumn) => innerState & {
+                        GetRowData(objects{currentColumn}[Data], currentRow, reversedColumnNames{currentColumn})
+                    }
+                )
+            }
+        ),
 
-        Correction0 = Table.TransformColumnTypes(CombinedobjectsToTable, CreateTransformColumnTypesList)
+        combinedObjectsToTable = #table(columnNames, combinedJoinedColumnsTableList),
+
+        // Create transformation list to define column types
+        transformColumnTypesIterator = List.Generate(() => totalColumnsCount, each _ > -1, each _ - 1),
+        transformColumnTypesList = List.Accumulate(
+            transformColumnTypesIterator, 
+            {}, 
+            (state, current) => state & {{reversedColumnNames{current}, dataTypeList{current}}}
+        ),
+
+        // Apply column type transformations
+        finalTable = Table.TransformColumnTypes(combinedObjectsToTable, transformColumnTypesList)
+
     in
-        Correction0;
+        finalTable;
 
 
 shared GetDataFromListOfTables = (listindex, name) =>
