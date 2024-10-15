@@ -561,35 +561,37 @@ shared GetNameOfTable = (num) =>
 
 shared GetElementInList = (NumberOfMultiSelect, Field) =>
     let
-
-        iterList = List.Generate(() =>  Value.Subtract(NumberOfMultiSelect, 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => Value.Subtract(NumberOfMultiSelect, 1), each _ > -1, each _ - 1),
      
         ListOfSelected = List.Accumulate(iterList, {}, (state, current) => state & {{Field{current}}}),
 
         ToTable = Table.FromList(ListOfSelected, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
         ToTableExpand = Table.ExpandListColumn(ToTable, "Column1"),
         ToExpanndRecord = Table.ExpandRecordColumn(ToTableExpand, "Column1", {"name"}, {"Column1.name"})
-
-        
-
     in
-        Text.Combine(Table.ToList(ToExpanndRecord), ", ");
-        
+        if Table.IsEmpty(ToExpanndRecord) then 
+            null 
+        else 
+            Text.Combine(Table.ToList(ToExpanndRecord), ", ");
+
 shared HandleMultiSelectFormat = (database, name, SPECIFYNAME) =>
     let
+        // Helper function to safely get multi-select values
+        SafeGetMultiSelect = (multi_select) => 
+            if multi_select = null then null
+            else if List.IsEmpty(multi_select) then null
+            else GetElementInList(List.Count(multi_select), multi_select),
 
-        CombinedTable2 = Table.AddColumn(database, "Combined_List", each GetElementInList(List.Count([multi_select]), [multi_select])),
-        RemoveUneccessary = Table.RemoveColumns(CombinedTable2, "multi_select"),
+        // Add column for combined multi-select values
+        CombinedTable = Table.AddColumn(database, "Combined_List", each SafeGetMultiSelect([multi_select])),
+        RemoveUnnecessary = Table.RemoveColumns(CombinedTable, "multi_select"),
 
-        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
-,
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1),
 
-        navHeader = {"Notion_Key", "Data"}, 
+        navHeader = {"Notion_Key", name}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{current, RemoveUneccessary{current}}} ),
-        objects = #table(navHeader, navInsights),
-
-        Expanded = Table.ExpandRecordColumn(objects, "Data", {"Combined_List"}, {name})
-
+            state & {{current, RemoveUnnecessary{current}[Combined_List]}}
+        ),
+        objects = #table(navHeader, navInsights)
     in
-        Expanded;
+        objects;
