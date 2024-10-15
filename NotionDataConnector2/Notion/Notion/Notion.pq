@@ -222,16 +222,22 @@ shared ConvertToTable_SubTableV2 = (database_records, name) =>
 
 shared HandleDateFormat = (database, name, SPECIFYNAME) =>
     let
-        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
-,
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1),
 
         navHeader = {"Notion_Key", name}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
-            state & {{current, database{current}[date]}} ),
+            let
+                dateRecord = database{current}[date],
+                dateValue = if dateRecord <> null and Record.HasFields(dateRecord, "start") then 
+                                dateRecord[start] 
+                            else 
+                                null
+            in
+                state & {{current, dateValue}}
+        ),
         objects = #table(navHeader, navInsights)
     in
         objects;
-
 
 
 shared HandleMultiSelect = (database_table, name) =>
