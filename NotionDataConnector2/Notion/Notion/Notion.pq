@@ -186,7 +186,8 @@ shared Notion.DatabaseProperties = (num) =>
 shared AddNotionKey = (database, name, SPECIFYNAME) =>
     let
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
@@ -200,7 +201,6 @@ shared AddNotionKey = (database, name, SPECIFYNAME) =>
 
 shared ConvertToTable_SubTableV2 = (database_records, name) =>
     let
-
         database_records_table          = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
         database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
 
@@ -213,10 +213,25 @@ shared ConvertToTable_SubTableV2 = (database_records, name) =>
         Check_3 = if Database_ColumnNames{0} = "rich_text"    then HandleRichTextFormat(Database_RemovedColumns, name, "rich_text")      else Check_2,
         Check_4 = if Database_ColumnNames{0} = "select"       then HandleSelectFormat(Database_RemovedColumns, name, "select")           else Check_3,
         Check_5 = if Database_ColumnNames{0} = "checkbox"     then HandleCheckBoxFormat(Database_RemovedColumns, name, "checkbox")       else Check_4,
-        Check_6 = if Database_ColumnNames{0} = "multi_select" then HandleMultiSelectFormat(Database_RemovedColumns, name, "multi_select")   else Check_5
+        Check_6 = if Database_ColumnNames{0} = "multi_select" then HandleMultiSelectFormat(Database_RemovedColumns, name, "multi_select")   else Check_5,
+        Check_7 = if Database_ColumnNames{0} = "date"         then HandleDateFormat(Database_RemovedColumns, name, "date")               else Check_6
 
     in
-        Check_6;
+        Check_7;
+
+
+shared HandleDateFormat = (database, name, SPECIFYNAME) =>
+    let
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
+
+        navHeader = {"Notion_Key", name}, 
+        navInsights = List.Accumulate(iterList, {}, (state, current) => 
+            state & {{current, database{current}[date]}} ),
+        objects = #table(navHeader, navInsights)
+    in
+        objects;
+
 
 
 shared HandleMultiSelect = (database_table, name) =>
@@ -241,24 +256,21 @@ GetRowData = (table, RowIter, ColumnName) =>
 
 GetDatatype = (database_records, num) =>
     let
-
-
         database_records_table          = Table.FromList(database_records, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
         database_records_table_expanded = Table.FromRecords(Table.Column(database_records_table, "Column1")),
         Database_RemovedColumns = RemoveUneccessaryColumns(database_records_table_expanded),
         Database_ColumnNames = Table.ColumnNames(Database_RemovedColumns),
-
 
         Check_1 = if Database_ColumnNames{0} = "title"        then type text    else type text,
         Check_2 = if Database_ColumnNames{0} = "number"       then Int64.Type   else Check_1,
         Check_3 = if Database_ColumnNames{0} = "rich_text"    then type text    else Check_2,
         Check_4 = if Database_ColumnNames{0} = "select"       then type text    else Check_3,
         Check_5 = if Database_ColumnNames{0} = "checkbox"     then type logical else Check_4,
-        Check_6 = if Database_ColumnNames{0} = "multi_select" then type text    else Check_5
-
+        Check_6 = if Database_ColumnNames{0} = "multi_select" then type text    else Check_5,
+        Check_7 = if Database_ColumnNames{0} = "date"         then type any     else Check_6
 
     in
-        Check_6;
+        Check_7;
 
 CreateNavTable = (num) as table => 
     let
@@ -432,7 +444,8 @@ shared HandleTitleFormat = (database, name, SPECIFYNAME) =>
 shared HandleNumberFormat = (database, name, SPECIFYNAME ) =>
     let
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
@@ -450,7 +463,8 @@ shared HandleNumberFormat = (database, name, SPECIFYNAME ) =>
 shared HandleRichTextFormat = (database, name, SPECIFYNAME ) =>
     let
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
@@ -471,7 +485,8 @@ shared HandleRichTextFormat = (database, name, SPECIFYNAME ) =>
 shared HandleSelectFormat = (database, name, SPECIFYNAME ) =>
     let
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
@@ -492,7 +507,8 @@ shared HandleSelectFormat = (database, name, SPECIFYNAME ) =>
 shared HandleCheckBoxFormat = (database, name, SPECIFYNAME ) =>
     let
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
@@ -559,7 +575,8 @@ shared HandleMultiSelectFormat = (database, name, SPECIFYNAME) =>
         CombinedTable2 = Table.AddColumn(database, "Combined_List", each GetElementInList(List.Count([multi_select]), [multi_select])),
         RemoveUneccessary = Table.RemoveColumns(CombinedTable2, "multi_select"),
 
-        iterList = List.Generate(() => Value.Subtract(Table.RowCount(database), 1), each _ > -1, each _ - 1),
+        iterList = List.Generate(() => 0, each _ < Table.RowCount(database), each _ + 1)
+,
 
         navHeader = {"Notion_Key", "Data"}, 
         navInsights = List.Accumulate(iterList, {}, (state, current) => 
